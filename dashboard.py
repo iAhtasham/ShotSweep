@@ -20,7 +20,7 @@ if not runtime.exists():
     # started as `python dashboard.py` -> relaunch under the streamlit server
     sys.exit(subprocess.call([sys.executable, "-m", "streamlit", "run", __file__, *sys.argv[1:]]))
 
-from screenshot_sorter import DB_PATH, LABELS
+from screenshot_sorter import DB_PATH, LABELS, classify
 
 st.set_page_config(page_title="WhatsApp Screenshot Sorter", layout="wide")
 
@@ -61,6 +61,17 @@ def set_mark(paths, value):
 if not Path(DB_PATH).exists():
     st.error(f"{DB_PATH} not found - run `python screenshot_sorter.py embed` and `classify` first.")
     st.stop()
+
+# ---------------------------------------------------------------- classify
+st.sidebar.header("Classify")
+embedded, unscored = con().execute(
+    "SELECT COUNT(emb), COUNT(emb) - COUNT(top_label) FROM images").fetchone()
+st.sidebar.caption(f"{embedded:,} images embedded, {unscored:,} not yet classified")
+if st.sidebar.button("Run classify", disabled=not embedded, width="stretch"):
+    with st.spinner(f"Classifying {embedded:,} images..."):
+        n, labels, _ = classify()
+    load.clear()
+    st.sidebar.success(f"Classified {n:,}: " + ", ".join(f"{k} {v:,}" for k, v in labels.items()))
 
 df = load()
 if df.empty:
