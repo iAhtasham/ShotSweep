@@ -21,7 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(r"E:\backup\Whatsapp")
+# WhatsApp media folder; override with the WHATSAPP_DIR environment variable
+ROOT = Path(os.environ.get("WHATSAPP_DIR", Path(__file__).with_name("Whatsapp")))
 DEFAULT_DIRS = [ROOT / "WhatsApp Images", ROOT / "GBWhatsApp Images"]
 DB_PATH = Path(__file__).with_name("screenshot_sorter.db")
 MODEL_ID = "openai/clip-vit-base-patch32"
