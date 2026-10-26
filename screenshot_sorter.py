@@ -88,7 +88,8 @@ CREATE INDEX IF NOT EXISTS idx_folder ON images(folder);
 
 
 def connect():
-    con = sqlite3.connect(DB_PATH)
+    # generous timeout: embed, classify and the dashboard may write concurrently
+    con = sqlite3.connect(DB_PATH, timeout=30)
     con.executescript(SCHEMA)
     return con
 
@@ -207,11 +208,12 @@ def text_embeddings(model, tok):
     return np.stack(out)
 
 
-def cmd_classify(args):
+def classify():
+    """Score every embedded image; returns (n, top-label counts, screenshot threshold counts)."""
     con = connect()
     rows = con.execute("SELECT path, emb FROM images WHERE emb IS NOT NULL").fetchall()
     if not rows:
-        sys.exit("no embeddings yet - run `embed` first")
+        return 0, {}, {}
     emb = np.stack([np.frombuffer(r[1], np.float16) for r in rows]).astype(np.float32)
 
     model, tok = load_model()
@@ -227,12 +229,23 @@ def cmd_classify(args):
         [(names[top[i]], *map(float, prob[i]), r[0]) for i, r in enumerate(rows)])
     con.commit()
 
-    print(f"classified {len(rows)} images in {DB_PATH}")
-    for k, name in enumerate(names):
-        print(f"  {name:13s} top-label: {(top == k).sum():6d}")
     s = prob[:, names.index("screenshot")]
-    for t in (0.5, 0.6, 0.7, 0.8, 0.9):
-        print(f"  screenshot prob >= {t}: {(s >= t).sum()}")
+    return (
+        len(rows),
+        {name: int((top == k).sum()) for k, name in enumerate(names)},
+        {t: int((s >= t).sum()) for t in (0.5, 0.6, 0.7, 0.8, 0.9)},
+    )
+
+
+def cmd_classify(args):
+    n, labels, thresholds = classify()
+    if not n:
+        sys.exit("no embeddings yet - run `embed` first")
+    print(f"classified {n} images in {DB_PATH}")
+    for name, c in labels.items():
+        print(f"  {name:13s} top-label: {c:6d}")
+    for t, c in thresholds.items():
+        print(f"  screenshot prob >= {t}: {c}")
 
 
 def main():
