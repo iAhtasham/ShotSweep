@@ -1,0 +1,5 @@
+# track only the sorter tool, never the backup data
+/*
+!/.gitignore
+!/screenshot_sorter.py
+!/dashboard.py
