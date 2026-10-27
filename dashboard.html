@@ -99,9 +99,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 /* ---------- viewer */
 .viewer { position: fixed; inset: 0; background: rgb(8 10 14 / .94); z-index: 50; display: none; grid-template-columns: 1fr 300px; }
 .viewer.open { display: grid; }
-.stage { position: relative; display: grid; place-items: center; padding: 24px; min-height: 0; }
-.stage img { max-width: 100%; max-height: calc(100vh - 48px); object-fit: contain; border-radius: 6px; box-shadow: 0 10px 40px rgb(0 0 0 / .5); }
-.nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 0; background: rgb(255 255 255 / .1); color: #fff; font-size: 22px; }
+.stage { position: relative; height: 100vh; min-height: 0; }
+.pane { position: absolute; inset: 0; padding: 16px 72px; overflow: hidden; display: grid; place-items: center; }
+.pane img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block; }
+/* zoomed: fit to width and scroll, so tall screenshots are readable */
+.pane.zoom { overflow-y: auto; place-items: start center; }
+.pane.zoom img { height: auto; max-width: 1100px; cursor: zoom-out; }
+.nav { position: absolute; z-index: 2; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 0; background: rgb(255 255 255 / .1); color: #fff; font-size: 22px; }
 .nav:hover { background: rgb(255 255 255 / .2); }
 .nav.prev { left: 16px; } .nav.next { right: 16px; }
 .info { background: #14171c; color: #e8eaee; padding: 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; border-left: 1px solid #262a32; }
@@ -127,6 +131,8 @@ kbd { background: #262a32; border: 1px solid #343a45; border-bottom-width: 2px; 
   .toolbar { top: 0; }
   :root { --tile: 130px; }
   .viewer { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .stage { height: auto; }
+  .pane { padding: 8px 56px; }
   .info { max-height: 45vh; }
 }
 </style>
@@ -215,7 +221,7 @@ kbd { background: #262a32; border: 1px solid #343a45; border-bottom-width: 2px; 
 <div class="viewer" id="viewer">
   <div class="stage">
     <button class="nav prev" id="prev" aria-label="Previous">‹</button>
-    <img id="v-img" alt="">
+    <div class="pane" id="pane"><img id="v-img" alt="" title="Click to zoom"></div>
     <button class="nav next" id="next" aria-label="Next">›</button>
   </div>
   <div class="info">
@@ -228,6 +234,7 @@ kbd { background: #262a32; border: 1px solid #343a45; border-bottom-width: 2px; 
     </div>
     <button class="btn" id="v-clear">Clear mark <kbd>U</kbd></button>
     <div class="keys">
+      <kbd>Click / Z</kbd><span>zoom to full width</span>
       <kbd>← →</kbd><span>previous / next</span>
       <kbd>D</kbd><span>mark delete, go to next</span>
       <kbd>K</kbd><span>mark keep, go to next</span>
@@ -406,7 +413,11 @@ function openViewer(idx) { viewIdx = idx; $("#viewer").classList.add("open"); re
 function closeViewer() { $("#viewer").classList.remove("open"); viewIdx = -1; }
 function renderViewer() {
   const it = items[viewIdx]; if (!it) return closeViewer();
-  $("#v-img").src = "/image/" + it.id;
+  const img = $("#v-img");
+  if (img.dataset.id !== String(it.id)) {  // new image: reset zoom
+    img.dataset.id = it.id; img.src = "/image/" + it.id;
+    $("#pane").classList.remove("zoom"); $("#pane").scrollTop = 0;
+  }
   $("#v-name").textContent = it.name;
   $("#v-meta").innerHTML = `
     <dt>${state.label.replace("_", " ")}</dt><dd>${it.score.toFixed(3)}</dd>
@@ -430,7 +441,9 @@ function markAndNext(m) { const it = items[viewIdx]; setMark(viewIdx, it.mark ==
 $("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1); $("#close").onclick = closeViewer;
 $("#v-del").onclick = () => markAndNext("delete"); $("#v-keep").onclick = () => markAndNext("keep");
 $("#v-clear").onclick = () => setMark(viewIdx, null);
-$(".stage").onclick = e => { if (e.target.classList.contains("stage")) closeViewer(); };
+function toggleZoom() { $("#pane").classList.toggle("zoom"); $("#pane").scrollTop = 0; }
+$("#v-img").onclick = toggleZoom;
+$("#pane").onclick = e => { if (e.target.id === "pane") closeViewer(); };
 addEventListener("keydown", e => {
   if (viewIdx < 0 || e.target.matches("input, select")) return;
   const k = e.key.toLowerCase();
@@ -438,6 +451,7 @@ addEventListener("keydown", e => {
   else if (k === "escape") closeViewer();
   else if (k === "d") markAndNext("delete"); else if (k === "k") markAndNext("keep");
   else if (k === "u") setMark(viewIdx, null);
+  else if (k === "z") toggleZoom();
   else return;
   e.preventDefault();
 });
