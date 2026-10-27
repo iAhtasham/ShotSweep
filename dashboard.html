@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShotSweep</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --border: #e3e6eb;
+  --text: #1b1f24; --muted: #667080; --accent: #3b6ef5; --accent-soft: #e6edff;
+  --del: #e5484d; --del-soft: #fde8e8; --keep: #2f9e5b; --keep-soft: #e3f5ea;
+  --tile-bg: #eceff3; --shadow: 0 1px 2px rgb(16 24 40 / .06), 0 1px 3px rgb(16 24 40 / .08);
+  --tile: 180px; --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115; --panel: #171a20; --panel-2: #1f232b; --border: #2a2f38;
+    --text: #e8eaee; --muted: #8b93a1; --accent: #6b8fff; --accent-soft: #1e2a4a;
+    --del: #ff6369; --del-soft: #3a1d20; --keep: #4cc38a; --keep-soft: #16301f;
+    --tile-bg: #1c2027; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ---------- layout */
+.app { display: grid; grid-template-columns: 290px 1fr; grid-template-rows: auto 1fr; height: 100vh; }
+header { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; padding: 12px 20px;
+         background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 17px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.brand svg { color: var(--accent); }
+.stats { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.stat { background: var(--panel-2); border-radius: 8px; padding: 5px 12px; display: flex; gap: 6px; align-items: baseline; }
+.stat b { font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+.stat.del b { color: var(--del); } .stat.keep b { color: var(--keep); }
+
+aside { background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 18px; }
+main { overflow-y: auto; padding: 16px 20px 40px; }
+
+/* ---------- controls */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label, .section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.seg { display: flex; background: var(--panel-2); border-radius: 8px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { flex: 1; border: 0; background: transparent; padding: 5px 8px; border-radius: 6px; font-size: 13px; white-space: nowrap; color: var(--muted); }
+.seg button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .seg button.on { background: var(--border); } }
+select { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); }
+.range-row { display: flex; gap: 8px; align-items: center; }
+.range-row input[type=number] { width: 70px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.hist { display: flex; align-items: flex-end; gap: 2px; height: 70px; }
+.hist div { flex: 1; background: var(--border); border-radius: 2px 2px 0 0; min-height: 2px; cursor: pointer; transition: background .15s; }
+.hist div.in { background: var(--accent); }
+.hist div:hover { opacity: .75; }
+.hist-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+.btn { border: 1px solid var(--border); background: var(--panel); padding: 7px 12px; border-radius: 8px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+.btn:hover { background: var(--panel-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.del { color: var(--del); } .btn.del:hover { background: var(--del-soft); }
+.btn.keep { color: var(--keep); } .btn.keep:hover { background: var(--keep-soft); }
+.btn.armed { background: var(--del); color: #fff; border-color: var(--del); }
+.btn:disabled { opacity: .5; cursor: default; }
+.muted { color: var(--muted); font-size: 12.5px; }
+
+/* ---------- toolbar + grid */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; position: sticky; top: -16px; z-index: 5;
+           background: var(--bg); padding: 12px 0; }
+.toolbar .count { font-size: 15px; font-weight: 600; margin-right: auto; }
+.toolbar .count span { color: var(--muted); font-weight: 400; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile), 1fr)); gap: 10px; }
+.tile { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--tile-bg); aspect-ratio: 3 / 4;
+        cursor: zoom-in; outline: 2px solid transparent; outline-offset: -2px; transition: outline-color .12s, transform .12s; }
+.tile:hover { transform: translateY(-1px); }
+.tile img { width: 100%; height: 100%; object-fit: contain; display: block; opacity: 0; transition: opacity .2s; }
+.tile img.ok { opacity: 1; }
+.tile .badge { position: absolute; left: 6px; bottom: 6px; background: rgb(0 0 0 / .62); color: #fff; font-size: 11.5px; font-weight: 600;
+               padding: 2px 7px; border-radius: 20px; font-variant-numeric: tabular-nums; backdrop-filter: blur(4px); }
+.tile .acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
+.tile:hover .acts, .tile:focus-within .acts { opacity: 1; }
+.tile .acts button { width: 30px; height: 30px; border-radius: 8px; border: 0; background: rgb(0 0 0 / .62); color: #fff; display: grid; place-items: center; backdrop-filter: blur(4px); }
+.tile .acts button:hover { background: rgb(0 0 0 / .85); }
+.tile.delete { outline-color: var(--del); }
+.tile.delete img { opacity: .45; }
+.tile.keep { outline-color: var(--keep); }
+.tile .flag { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; color: #fff; display: none; }
+.tile.delete .flag { display: block; background: var(--del); } .tile.delete .flag::after { content: "DELETE"; }
+.tile.keep .flag { display: block; background: var(--keep); } .tile.keep .flag::after { content: "KEEP"; }
+.empty { text-align: center; padding: 80px 20px; color: var(--muted); }
+#sentinel { height: 1px; }
+.loading { text-align: center; color: var(--muted); padding: 20px; }
+
+/* ---------- viewer */
+.viewer { position: fixed; inset: 0; background: rgb(8 10 14 / .94); z-index: 50; display: none; grid-template-columns: 1fr 300px; }
+.viewer.open { display: grid; }
+.stage { position: relative; display: grid; place-items: center; padding: 24px; min-height: 0; }
+.stage img { max-width: 100%; max-height: calc(100vh - 48px); object-fit: contain; border-radius: 6px; box-shadow: 0 10px 40px rgb(0 0 0 / .5); }
+.nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 0; background: rgb(255 255 255 / .1); color: #fff; font-size: 22px; }
+.nav:hover { background: rgb(255 255 255 / .2); }
+.nav.prev { left: 16px; } .nav.next { right: 16px; }
+.info { background: #14171c; color: #e8eaee; padding: 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; border-left: 1px solid #262a32; }
+.info h3 { margin: 0; font-size: 14px; word-break: break-all; font-weight: 600; }
+.info dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.info dt { color: #8b93a1; } .info dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-all; }
+.info .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.info .btn { background: #1f232b; border-color: #2f343e; color: #e8eaee; padding: 10px; }
+.info .btn.del { color: #ff6369; } .info .btn.keep { color: #4cc38a; }
+.info .btn.on.del { background: #e5484d; color: #fff; border-color: #e5484d; }
+.info .btn.on.keep { background: #2f9e5b; color: #fff; border-color: #2f9e5b; }
+.keys { font-size: 12px; color: #8b93a1; display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; margin-top: auto; }
+kbd { background: #262a32; border: 1px solid #343a45; border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; font: 11px/18px ui-monospace, monospace; color: #e8eaee; text-align: center; }
+.close { position: absolute; top: 14px; right: 14px; z-index: 2; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg);
+         padding: 9px 16px; border-radius: 8px; opacity: 0; transition: .2s; z-index: 60; pointer-events: none; font-weight: 500; }
+.toast.show { opacity: 1; transform: translateX(-50%); }
+
+@media (max-width: 820px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
+  aside { border-right: 0; border-bottom: 1px solid var(--border); }
+  main { overflow: visible; padding: 12px 16px 40px; }
+  .toolbar { top: 0; }
+  :root { --tile: 130px; }
+  .viewer { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .info { max-height: 45vh; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg>ShotSweep</div>
+    <div class="stats" id="stats"></div>
+    <a class="btn" href="/export" id="export">Export delete list</a>
+  </header>
+
+  <aside>
+    <div class="field">
+      <label>Score by label</label>
+      <div class="seg" id="label"></div>
+    </div>
+
+    <div class="field">
+      <label>Score range</label>
+      <div class="range-row">
+        <input type="number" id="lo" min="0" max="1" step="0.01">
+        <input type="range" id="lo-r" min="0" max="1" step="0.01">
+      </div>
+      <div class="range-row">
+        <input type="number" id="hi" min="0" max="1" step="0.01">
+        <input type="range" id="hi-r" min="0" max="1" step="0.01">
+      </div>
+      <div class="hist" id="hist" title="Click a bar to filter to that score band"></div>
+      <div class="hist-axis"><span>0</span><span>0.5</span><span>1</span></div>
+    </div>
+
+    <div class="field">
+      <label>Mark</label>
+      <div class="seg" id="mark"></div>
+    </div>
+
+    <div class="field">
+      <label>Shape</label>
+      <select id="shape">
+        <option value="">Any shape</option>
+        <option value="phone">Phone screen (taller than 1.9:1)</option>
+        <option value="tall">Tall (16:9 portrait)</option>
+        <option value="portrait">Portrait (4:3)</option>
+        <option value="square">Square</option>
+        <option value="landscape">Landscape (4:3)</option>
+        <option value="wide">Wide (16:9 landscape)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Folder</label>
+      <select id="folder"><option value="">All folders</option></select>
+    </div>
+
+    <div class="field">
+      <label>Sort</label>
+      <div class="seg" id="sort"></div>
+    </div>
+
+    <div class="field">
+      <label>Tile size</label>
+      <input type="range" id="tile" min="110" max="320" step="10">
+    </div>
+
+    <div class="field">
+      <div class="section-title">Classify</div>
+      <div class="muted" id="cls-info"></div>
+      <button class="btn" id="cls-btn">Run classify</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <div class="count" id="count">…</div>
+      <button class="btn del" data-bulk="delete">Mark all → delete</button>
+      <button class="btn keep" data-bulk="keep">Mark all → keep</button>
+      <button class="btn" data-bulk="clear">Clear marks</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="loading" id="loading" hidden>Loading…</div>
+    <div id="sentinel"></div>
+  </main>
+</div>
+
+<div class="viewer" id="viewer">
+  <div class="stage">
+    <button class="nav prev" id="prev" aria-label="Previous">‹</button>
+    <img id="v-img" alt="">
+    <button class="nav next" id="next" aria-label="Next">›</button>
+  </div>
+  <div class="info">
+    <button class="btn close" id="close" aria-label="Close">✕</button>
+    <h3 id="v-name"></h3>
+    <dl id="v-meta"></dl>
+    <div class="acts">
+      <button class="btn del" id="v-del">Delete <kbd>D</kbd></button>
+      <button class="btn keep" id="v-keep">Keep <kbd>K</kbd></button>
+    </div>
+    <button class="btn" id="v-clear">Clear mark <kbd>U</kbd></button>
+    <div class="keys">
+      <kbd>← →</kbd><span>previous / next</span>
+      <kbd>D</kbd><span>mark delete, go to next</span>
+      <kbd>K</kbd><span>mark keep, go to next</span>
+      <kbd>U</kbd><span>clear mark</span>
+      <kbd>Esc</kbd><span>close</span>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const PAGE = 150;
+const store = (() => { try { return JSON.parse(localStorage.getItem("shotsweep") || "{}"); } catch { return {}; } })();
+const state = Object.assign({ label: "screenshot", lo: 0.5, hi: 1, mark: "any", shape: "", folder: "", sort: "asc", tile: 180 }, store);
+let items = [], total = 0, loading = false, done = false, gen = 0, viewIdx = -1;
+
+const fmtN = n => (n || 0).toLocaleString();
+const fmtGB = b => ((b || 0) / 1024 ** 3).toFixed(2) + " GB";
+const fmtMB = b => (b / 1024 ** 2).toFixed(2) + " MB";
+function save() { try { localStorage.setItem("shotsweep", JSON.stringify(state)); } catch {} }
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800); }
+function params(extra = {}) {
+  const p = { label: state.label, lo: state.lo, hi: state.hi, mark: state.mark, sort: state.sort };
+  if (state.shape) p.shape = state.shape;
+  if (state.folder) p.folder = state.folder;
+  return Object.assign(p, extra);
+}
+async function api(url, body) {
+  const r = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+// ---------- controls
+function seg(el, options, key, onChange) {
+  el.innerHTML = "";
+  for (const [value, text] of options) {
+    const b = document.createElement("button");
+    b.textContent = text; b.dataset.v = value;
+    b.className = state[key] === value ? "on" : "";
+    b.onclick = () => { state[key] = value; [...el.children].forEach(c => c.classList.toggle("on", c === b)); onChange(); };
+    el.appendChild(b);
+  }
+}
+function syncRange() {
+  for (const k of ["lo", "hi"]) { $("#" + k).value = state[k].toFixed(2); $("#" + k + "-r").value = state[k]; }
+  [...$("#hist").children].forEach((d, i) => d.classList.toggle("in", (i + 1) / 20 > state.lo && i / 20 < state.hi));
+}
+function setRange(lo, hi) {
+  state.lo = Math.max(0, Math.min(lo, 1)); state.hi = Math.max(state.lo, Math.min(hi, 1));
+  syncRange(); changed();
+}
+for (const k of ["lo", "hi"]) {
+  const other = k === "lo" ? "hi" : "lo";
+  const apply = v => { v = parseFloat(v); if (isNaN(v)) return; k === "lo" ? setRange(v, Math.max(v, state.hi)) : setRange(Math.min(state.lo, v), v); };
+  $("#" + k).onchange = e => apply(e.target.value);
+  $("#" + k + "-r").oninput = e => apply(e.target.value);
+}
+
+let debounce;
+function changed() { save(); clearTimeout(debounce); debounce = setTimeout(reload, 200); }
+
+// ---------- data
+async function loadSummary() {
+  const s = await api("/api/summary");
+  if (!$("#label").children.length) {
+    seg($("#label"), s.labels.map(l => [l, l.replace("_", " ")]), "label", () => { loadHist(); changed(); });
+    seg($("#mark"), [["any", "Any"], ["unmarked", "Unmarked"], ["delete", "Delete"], ["keep", "Keep"]], "mark", changed);
+    seg($("#sort"), [["asc", "Score ↑ (unsure first)"], ["desc", "Score ↓"]], "sort", changed);
+    for (const f of s.folders) $("#folder").add(new Option(f, f));
+    $("#folder").value = state.folder; $("#shape").value = state.shape;
+  }
+  $("#stats").innerHTML = `
+    <div class="stat"><b>${fmtN(s.classified)}</b><span>images</span></div>
+    <div class="stat"><b>${fmtN(s.tops.screenshot)}</b><span>screenshots (top label)</span></div>
+    <div class="stat del"><b>${fmtN(s.del_n)}</b><span>to delete · ${fmtGB(s.del_bytes)}</span></div>
+    <div class="stat keep"><b>${fmtN(s.keep_n)}</b><span>keep</span></div>
+    ${s.empty ? `<div class="stat"><b>${fmtN(s.empty)}</b><span>empty files skipped</span></div>` : ""}`;
+  const unscored = s.embedded - s.classified;
+  $("#cls-info").textContent = s.job.running ? s.job.message
+    : `${fmtN(s.embedded)} embedded · ${fmtN(unscored)} not yet classified` + (s.job.message ? ` — ${s.job.message}` : "");
+  $("#cls-btn").disabled = s.job.running || !s.embedded;
+  $("#export").style.opacity = s.del_n ? 1 : .5;
+  return s;
+}
+async function loadHist() {
+  const bins = await api("/api/histogram?label=" + state.label);
+  const max = Math.max(...bins, 1);
+  $("#hist").innerHTML = bins.map((n, i) => `<div style="height:${Math.max(3, Math.sqrt(n / max) * 100)}%" title="${(i / 20).toFixed(2)}–${((i + 1) / 20).toFixed(2)}: ${fmtN(n)}"></div>`).join("");
+  [...$("#hist").children].forEach((d, i) => d.onclick = () => setRange(i / 20, (i + 1) / 20));
+  syncRange();
+}
+
+function reload() {
+  gen++; items = []; done = false; viewIdx = -1;
+  $("#grid").innerHTML = "";
+  loadMore();
+}
+async function loadMore() {
+  if (loading || done) return;
+  loading = true; $("#loading").hidden = false;
+  const my = gen;
+  try {
+    const r = await api("/api/images?" + new URLSearchParams(params({ offset: items.length, limit: PAGE })));
+    if (my !== gen) return;
+    total = r.total;
+    $("#count").innerHTML = `${fmtN(r.total)} images <span>· ${fmtGB(r.bytes)} in this filter</span>`;
+    const frag = document.createDocumentFragment();
+    r.items.forEach((it, k) => frag.appendChild(tile(it, items.length + k)));
+    items.push(...r.items);
+    $("#grid").appendChild(frag);
+    done = items.length >= total;
+    if (!total) $("#grid").innerHTML = `<div class="empty">No images match these filters.</div>`;
+  } finally {
+    if (my === gen) { loading = false; $("#loading").hidden = true; }
+    else loading = false;
+  }
+  // keep filling if the sentinel is still on screen
+  requestAnimationFrame(() => { if (!done && $("#sentinel").getBoundingClientRect().top < innerHeight + 600) loadMore(); });
+}
+
+function tile(it, idx) {
+  const d = document.createElement("div");
+  d.className = "tile" + (it.mark ? " " + it.mark : "");
+  d.dataset.idx = idx;
+  d.innerHTML = `<img loading="lazy" decoding="async" alt="">
+    <span class="flag"></span>
+    <span class="badge">${it.score.toFixed(2)}</span>
+    <div class="acts">
+      <button title="Mark delete" data-m="delete">🗑</button>
+      <button title="Mark keep" data-m="keep">✓</button>
+    </div>`;
+  const img = d.querySelector("img");
+  img.onload = () => img.classList.add("ok");
+  img.src = "/thumb/" + it.id;
+  d.title = `${it.name}\n${it.w}×${it.h} · ${it.top}`;
+  d.onclick = e => {
+    const b = e.target.closest("button");
+    if (b) { e.stopPropagation(); setMark(idx, items[idx].mark === b.dataset.m ? null : b.dataset.m); }
+    else openViewer(idx);
+  };
+  return d;
+}
+
+async function setMark(idx, mark) {
+  const it = items[idx];
+  it.mark = mark;
+  const el = $(`.tile[data-idx="${idx}"]`);
+  if (el) el.className = "tile" + (mark ? " " + mark : "");
+  if (viewIdx === idx) renderViewer();
+  await api("/api/mark", { ids: [it.id], mark });
+  loadSummary();
+}
+
+document.querySelectorAll("[data-bulk]").forEach(b => {
+  b.onclick = async () => {
+    if (!total) return;
+    if (!b.classList.contains("armed")) {
+      document.querySelectorAll("[data-bulk].armed").forEach(x => { x.classList.remove("armed"); x.textContent = x.dataset.label; });
+      b.dataset.label = b.textContent; b.classList.add("armed"); b.textContent = `Confirm: ${fmtN(total)} images`;
+      clearTimeout(b._h); b._h = setTimeout(() => { b.classList.remove("armed"); b.textContent = b.dataset.label; }, 4000);
+      return;
+    }
+    b.classList.remove("armed"); b.textContent = b.dataset.label;
+    const mark = b.dataset.bulk === "clear" ? null : b.dataset.bulk;
+    const p = params(); delete p.sort;
+    const r = await api("/api/mark", { filter: p, mark });
+    toast(`${fmtN(r.updated)} images ${mark ? "marked " + mark : "cleared"}`);
+    loadSummary(); reload();
+  };
+});
+
+// ---------- viewer
+function openViewer(idx) { viewIdx = idx; $("#viewer").classList.add("open"); renderViewer(); }
+function closeViewer() { $("#viewer").classList.remove("open"); viewIdx = -1; }
+function renderViewer() {
+  const it = items[viewIdx]; if (!it) return closeViewer();
+  $("#v-img").src = "/image/" + it.id;
+  $("#v-name").textContent = it.name;
+  $("#v-meta").innerHTML = `
+    <dt>${state.label.replace("_", " ")}</dt><dd>${it.score.toFixed(3)}</dd>
+    <dt>Top label</dt><dd>${it.top.replace("_", " ")}</dd>
+    <dt>Size</dt><dd>${it.w} × ${it.h} · ${fmtMB(it.size)}</dd>
+    <dt>Folder</dt><dd>${it.folder}</dd>
+    <dt>Position</dt><dd>${fmtN(viewIdx + 1)} of ${fmtN(total)}</dd>`;
+  $("#v-del").classList.toggle("on", it.mark === "delete");
+  $("#v-keep").classList.toggle("on", it.mark === "keep");
+  // prefetch the next full image
+  const nx = items[viewIdx + 1]; if (nx) new Image().src = "/image/" + nx.id;
+  $(`.tile[data-idx="${viewIdx}"]`)?.scrollIntoView({ block: "nearest" });
+}
+async function step(d) {
+  const n = viewIdx + d;
+  if (n < 0) return;
+  if (n >= items.length) { if (done) return toast("End of list"); await loadMore(); }
+  if (items[n]) { viewIdx = n; renderViewer(); }
+}
+function markAndNext(m) { const it = items[viewIdx]; setMark(viewIdx, it.mark === m ? null : m); if (m) step(1); }
+$("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1); $("#close").onclick = closeViewer;
+$("#v-del").onclick = () => markAndNext("delete"); $("#v-keep").onclick = () => markAndNext("keep");
+$("#v-clear").onclick = () => setMark(viewIdx, null);
+$(".stage").onclick = e => { if (e.target.classList.contains("stage")) closeViewer(); };
+addEventListener("keydown", e => {
+  if (viewIdx < 0 || e.target.matches("input, select")) return;
+  const k = e.key.toLowerCase();
+  if (k === "arrowright") step(1); else if (k === "arrowleft") step(-1);
+  else if (k === "escape") closeViewer();
+  else if (k === "d") markAndNext("delete"); else if (k === "k") markAndNext("keep");
+  else if (k === "u") setMark(viewIdx, null);
+  else return;
+  e.preventDefault();
+});
+
+// ---------- misc controls
+$("#shape").onchange = e => { state.shape = e.target.value; changed(); };
+$("#folder").onchange = e => { state.folder = e.target.value; changed(); };
+$("#tile").value = state.tile;
+document.documentElement.style.setProperty("--tile", state.tile + "px");
+$("#tile").oninput = e => { state.tile = +e.target.value; document.documentElement.style.setProperty("--tile", state.tile + "px"); save(); };
+
+let poll;
+$("#cls-btn").onclick = async () => {
+  await api("/api/classify", {});
+  loadSummary();
+  clearInterval(poll);
+  poll = setInterval(async () => {
+    const s = await loadSummary();
+    if (!s.job.running) { clearInterval(poll); toast(s.job.message); loadHist(); reload(); }
+  }, 1500);
+};
+
+new IntersectionObserver(es => { if (es[0].isIntersecting) loadMore(); }, { root: null, rootMargin: "600px" }).observe($("#sentinel"));
+
+loadSummary().then(() => { loadHist(); reload(); });
+</script>
+</body>
+</html>
