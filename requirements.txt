@@ -1,6 +1,5 @@
+flask
 numpy
-pandas
 pillow
-streamlit
 torch
 transformers
