@@ -11,7 +11,7 @@ ShotSweep runs [CLIP](https://huggingface.co/openai/clip-vit-base-patch32) zero-
 | `document`     | photos of paper, receipts, handwritten notes            |
 | `photo`        | people, places, food, objects, events                   |
 
-A Streamlit dashboard lets you browse the results, mark images as *delete* or *keep*, and export the marked paths.
+A local web dashboard lets you browse the results, open any image full size, mark images as *delete* or *keep*, and export the marked paths.
 
 **ShotSweep never moves or deletes files.** You decide what to do with the exported list.
 
@@ -49,13 +49,17 @@ export WHATSAPP_DIR=/path/to/WhatsApp        # PowerShell: $env:WHATSAPP_DIR = "
 3. **Review** in the dashboard:
 
    ```sh
-   python dashboard.py        # or: streamlit run dashboard.py
+   python dashboard.py        # opens http://127.0.0.1:8501 (--port, --no-browser)
    ```
 
-   - Filter by label, score range, folder, and mark status.
-   - Mark single images, or everything in the current filter, as delete/keep.
+   - Filter by label, score range (or click a bar in the score histogram), image shape, folder, and mark status.
+   - Sort by score, lowest first, to see the borderline images first. More images load as you scroll.
+   - Click a thumbnail to open it full size. Use the arrow keys to move between images. Press <kbd>D</kbd> to mark *delete* or <kbd>K</kbd> to mark *keep* and move to the next image, <kbd>U</kbd> to clear the mark, and <kbd>Esc</kbd> to close.
+   - Mark everything in the current filter at once. You have to click twice to confirm.
    - Run classify from the sidebar.
    - Export the paths marked *delete* as a text file.
+
+   The dashboard listens on `127.0.0.1` only, so other devices on your network can't see your images.
 
 ## Tips
 
