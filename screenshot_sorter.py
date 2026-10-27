@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS images (
 );
 CREATE INDEX IF NOT EXISTS idx_top ON images(top_label);
 CREATE INDEX IF NOT EXISTS idx_folder ON images(folder);
+{"".join(f"CREATE INDEX IF NOT EXISTS idx_{k} ON images({k});" for k in LABELS)}
 """
 
 
